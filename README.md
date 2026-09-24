@@ -95,63 +95,79 @@ C:/Users/rx830/AppData/Local/Programs/Python/Python310/python.exe -m http.server
 | **`prefers-reduced-motion: reduce`** | **未検証**（Browser paneでエミュレートできないため）。ブラウザのDevToolsで要確認 |
 | **実機（スマホ）** | **未検証**（LAN配信は利用者側ターミナルで実施推奨） |
 
-## 公開状況（2026-09-24 実施）
+## 公開状況（2026-09-25 完了）
 
-| STEP | 状態 |
+**本番URL: <https://rocu.co.jp/>** — HTTPS 有効・Enforce HTTPS 済み。
+
+| 確認項目 | 結果 |
 |---|---|
-| 1. リポジトリ作成・push・Pages有効化 | **完了** |
-| 2. GitHub側に独自ドメイン `rocu.co.jp` を登録 | **完了**（`CNAME` ファイルが自動コミットされ、pull 済み） |
-| 3. Xserver の DNS にレコード追加 | **未実施（利用者作業）** |
-| 4. 反映確認と Enforce HTTPS | 未実施（STEP 3 待ち） |
-| 5. Stripe へ提出 | 未実施 |
+| `https://rocu.co.jp/` | 表示される |
+| `http://rocu.co.jp/` | https へリダイレクト |
+| `https://www.rocu.co.jp/` | `https://rocu.co.jp/` へリダイレクト |
+| 配信ファイル（HTML3枚＋CSS/JS） | ローカル検証時と SHA-256 一致 |
+| リポジトリ | <https://github.com/rx830128/rocu-site>（public） |
 
-- リポジトリ: <https://github.com/rx830128/rocu-site>（public）
-- 暫定URL: <https://rx830128.github.io/rocu-site/>（STEP 3 完了後は rocu.co.jp へリダイレクト）
-- 本番URL: <https://rocu.co.jp/>（DNS未設定のため現時点では到達しない）
+### ★証明書が発行されない詰まり方と直し方（2026-09-24〜25 実害）
 
-デプロイ検証: `index.html` / `company.html` / `contact.html` / `assets/style.css` /
-`assets/app.js` / `assets/favicon.svg` の6ファイルが、ローカルで検証したファイルと
-**SHA-256 一致**（HTTPS配信・content-type も正常）。
+**DNS が正しく向いていても、GitHub が証明書の発行処理を始めないことがある。**
 
-★★**GitHub側の独自ドメイン登録を先に済ませてある**（GitHub公式の指示順）。
-DNSを先に向けるとサブドメイン乗っ取りのリスクがあるため、この順序を崩さないこと。
-
-### ★残り: STEP 3 — Xserver の DNS にレコードを追加（利用者がパネルで実施）
-
-| ホスト | 種別 | 値 |
-|---|---|---|
-| @ | A | 185.199.108.153 |
-| @ | A | 185.199.109.153 |
-| @ | A | 185.199.110.153 |
-| @ | A | 185.199.111.153 |
-| www | CNAME | rx830128.github.io |
-
-IPv6 も入れるなら AAAA を4本（`2606:50c0:8000::153` / `8001::153` / `8002::153` / `8003::153`）。
-GitHub は「AAAA を入れるなら A も併記すること」と書いている。
-上記の値は 2026-09-24 に GitHub 公式ドキュメント本文で確認したもの。
-<https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site>
-
-★**既存の MX・SPF・DKIM・DMARC は一切触らない**（触ると info@rocu.co.jp が死ぬ）。
-★**Xserver が自動で作る @ / www の既定 A レコードがあれば削除する**
-（GitHub docs: "If your DNS provider automatically sets a default record, remove it before continuing."）。
-★ワイルドカード（`*.rocu.co.jp`）は作らない（GitHub が乗っ取りリスクとして明示的に非推奨）。
-
-推奨: GitHub のアカウント設定（Settings → Pages）でドメイン所有権を検証しておくと、
-他人が同じドメインを自分のリポジトリへ設定できなくなる（`_github-pages-challenge-rx830128` TXT）。
-
-### STEP 4 — 反映確認と HTTPS
+- 症状: A×4 も www CNAME も正常、`http://` では見えるのに `https://` が通らない。
+  `gh api repos/<owner>/<repo>/pages` の応答に **`https_certificate` フィールドが存在しない**（`state` が `none` 以前）。
+  `pages/health` が `{}` を返す
+- 24時間待っても変化なし。待っても直らない
+- **直し方: 独自ドメインを一度外して付け直す**
 
 ```
-nslookup rocu.co.jp
+echo '{"cname":null,"source":{"branch":"main","path":"/"}}' > payload.json
+gh api -X PUT repos/rx830128/rocu-site/pages --input payload.json
+# ビルド完了を待って2分置く
+gh api -X PUT repos/rx830128/rocu-site/pages -f cname=rocu.co.jp
 ```
 
-上記4IPが返ることを確認する（DNS反映は最大24時間）。
-そのあとリポジトリの Settings → Pages で **Enforce HTTPS** を有効化する
-（証明書発行まで最大24時間かかることがある）。2026-09-24 時点では `https_enforced: false`。
+付け直した直後に `https_certificate.state` が `authorization_created` で出現し、**1分以内に `approved`** になった。
+そのあと `gh api -X PUT repos/rx830128/rocu-site/pages -F https_enforced=true` で Enforce HTTPS を有効化。
 
-### STEP 5 — Stripe へ提出
+★**待ちと詰まりの見分け方は `https_certificate` フィールドの有無**。
+フィールドが出ていれば進行中（待てばよい）、出ていなければキックされていない（付け直す）。
 
-`https://rocu.co.jp/` を提出。**HTTPS が有効になってから**出すこと。
+★付け直すと GitHub が `CNAME` ファイルを作り直すので、ローカルは `git pull` すること。
+
+## DNS レコード（rocu.co.jp・14件）
+
+| ホスト名 | 種別 | 内容 | 用途 |
+|---|---|---|---|
+| rocu.co.jp | NS ×3 | ns1–3.xdomain.ne.jp | Xserver |
+| rocu.co.jp | SOA | ns1.xdomain.ne.jp root.xdomain.ne.jp 0 | Xserver |
+| rocu.co.jp | A ×4 | 185.199.108–111.153 | GitHub Pages |
+| www.rocu.co.jp | CNAME | rx830128.github.io | GitHub Pages |
+| **rocu.co.jp** | **MX** | **smtp.google.com（優先度1）** | **Google Workspace・触るな** |
+| rocu.co.jp | TXT | google-site-verification=… | Google 所有権確認・触るな |
+| rocu.co.jp | TXT | v=spf1 include:_spf.google.com ~all | SPF（2026-09-24 追加） |
+| google._domainkey | TXT | v=DKIM1; k=rsa; p=…（2048bit・410文字） | DKIM（2026-09-24 追加） |
+| _dmarc | TXT | v=DMARC1; p=none; rua=mailto:info@rocu.co.jp; pct=100; adkim=r; aspf=r | DMARC（2026-09-24 追加） |
+
+DKIM は Google 管理コンソール（アプリ → Google Workspace → Gmail → メールの認証）で
+ドメイン `rocu.co.jp` を選んで鍵を生成し、DNS 登録後に**「認証を開始」まで押してある**。
+ステータスは「DKIM でメールを認証しています」。
+
+★**管理コンソールの初期選択は `fanzs.net`。** `rocu.co.jp` に切り替えてから操作すること。
+切り替えないと既存ドメインの設定を触ることになる。
+
+★**DKIM の公開鍵は Claude in Chrome の出力フィルタにマスクされる**（base64 の誤検知）。
+管理コンソール側でクリップボードへコピー → Xserver 側で Ctrl+V で渡す。
+`document.execCommand('copy')` は**タブがフォーカスされていないと false を返す**ので、
+先に画面をクリックしてから実行する。
+
+★Xserver の DNS 追加フォームは**ホスト名を空欄にすると apex**（確認画面では `.rocu.co.jp` と紛らわしく表示される）。
+255文字を超える TXT は Xserver が自動で分割して格納する（DNS 仕様どおりで正常）。
+
+### 残っていること
+
+- SPF/DKIM/DMARC の認証が効き始めるまで最大48時間。実際に効いているかは送信メールのヘッダで
+  `SPF: PASS` / `DKIM: PASS` / `DMARC: PASS` を確認する
+- DMARC は `p=none`（監視のみ）。`rua` 宛に集計レポートが届く。数週間安定して PASS を確認してから
+  `p=quarantine` → `p=reject` と上げる。**いきなり上げると自社メールが落ちる**
+- Stripe への提出: `https://rocu.co.jp/`
 
 ### 更新のしかた
 
