@@ -95,52 +95,28 @@ C:/Users/rx830/AppData/Local/Programs/Python/Python310/python.exe -m http.server
 | **`prefers-reduced-motion: reduce`** | **未検証**（Browser paneでエミュレートできないため）。ブラウザのDevToolsで要確認 |
 | **実機（スマホ）** | **未検証**（LAN配信は利用者側ターミナルで実施推奨） |
 
-## 公開（未実施・GitHub Pages で行うと決定：2026-09-24 利用者選択）
+## 公開状況（2026-09-24 実施）
 
-★**まだ何も公開していない。** `git init` すら実行していない（hp-mock の鉄則3に従い、
-`git init` 〜 `gh repo create` 〜 Pages 公開は利用者の明示GO後にのみ実行する）。
+| STEP | 状態 |
+|---|---|
+| 1. リポジトリ作成・push・Pages有効化 | **完了** |
+| 2. GitHub側に独自ドメイン `rocu.co.jp` を登録 | **完了**（`CNAME` ファイルが自動コミットされ、pull 済み） |
+| 3. Xserver の DNS にレコード追加 | **未実施（利用者作業）** |
+| 4. 反映確認と Enforce HTTPS | 未実施（STEP 3 待ち） |
+| 5. Stripe へ提出 | 未実施 |
 
-ドメイン `rocu.co.jp` は Xserver 管理（ns1-3.xdomain.ne.jp）、2026-09-24 時点で A レコード無し。
-メール（Google Workspace）は稼働中なので、**MX・SPF・DKIM・DMARC には触らない**。
-GitHub アカウントは `rx830128`（`gh auth status` で確認済み・scopes に `repo` あり）。
+- リポジトリ: <https://github.com/rx830128/rocu-site>（public）
+- 暫定URL: <https://rx830128.github.io/rocu-site/>（STEP 3 完了後は rocu.co.jp へリダイレクト）
+- 本番URL: <https://rocu.co.jp/>（DNS未設定のため現時点では到達しない）
 
-### ★順序を間違えないこと（GitHub 公式の指示）
+デプロイ検証: `index.html` / `company.html` / `contact.html` / `assets/style.css` /
+`assets/app.js` / `assets/favicon.svg` の6ファイルが、ローカルで検証したファイルと
+**SHA-256 一致**（HTTPS配信・content-type も正常）。
 
-> Make sure you add your custom domain to your GitHub Pages site **before** configuring your
-> custom domain with your DNS provider. Configuring your custom domain with your DNS provider
-> without adding your custom domain to GitHub could result in someone else being able to host
-> a site on one of your subdomains.
-> — <https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site>（2026-09-24 に本文で確認）
+★★**GitHub側の独自ドメイン登録を先に済ませてある**（GitHub公式の指示順）。
+DNSを先に向けるとサブドメイン乗っ取りのリスクがあるため、この順序を崩さないこと。
 
-つまり **GitHub側の独自ドメイン登録 → DNS** の順。逆にすると乗っ取りリスクがある。
-
-### STEP 1 — リポジトリ作成と push（GO後にこちらで実行可）
-
-```
-git -C C:/hp-mock-factory/site-rocu init -b main
-git -C C:/hp-mock-factory/site-rocu add -A
-git -C C:/hp-mock-factory/site-rocu commit -m "株式会社禄 コーポレートサイト 初版"
-gh repo create rocu-site --public --source C:/hp-mock-factory/site-rocu --push
-gh api -X POST repos/rx830128/rocu-site/pages -f "source[branch]=main" -f "source[path]=/"
-```
-
-→ `https://rx830128.github.io/rocu-site/` で表示を確認する（ここまでは DNS 不要）。
-
-### STEP 2 — GitHub 側に独自ドメインを登録（DNSより先）
-
-```
-gh api -X PUT repos/rx830128/rocu-site/pages -f cname=rocu.co.jp
-```
-
-リポジトリ直下に `CNAME`（内容 `rocu.co.jp`）が作られる。
-★この時点から github.io URL は rocu.co.jp へリダイレクトするので、
-**STEP 3 が終わるまでサイトは見えない**。これは想定どおりで異常ではない。
-
-推奨: 併せてドメイン所有権の検証（`_github-pages-challenge-rx830128` TXT レコード）も行うと、
-他人が同じドメインを自分のリポジトリに設定できなくなる。
-手順は GitHub の「Verifying your custom domain for GitHub Pages」。
-
-### STEP 3 — Xserver の DNS にレコードを追加（利用者がパネルで実施）
+### ★残り: STEP 3 — Xserver の DNS にレコードを追加（利用者がパネルで実施）
 
 | ホスト | 種別 | 値 |
 |---|---|---|
@@ -153,11 +129,15 @@ gh api -X PUT repos/rx830128/rocu-site/pages -f cname=rocu.co.jp
 IPv6 も入れるなら AAAA を4本（`2606:50c0:8000::153` / `8001::153` / `8002::153` / `8003::153`）。
 GitHub は「AAAA を入れるなら A も併記すること」と書いている。
 上記の値は 2026-09-24 に GitHub 公式ドキュメント本文で確認したもの。
+<https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site>
 
 ★**既存の MX・SPF・DKIM・DMARC は一切触らない**（触ると info@rocu.co.jp が死ぬ）。
 ★**Xserver が自動で作る @ / www の既定 A レコードがあれば削除する**
 （GitHub docs: "If your DNS provider automatically sets a default record, remove it before continuing."）。
 ★ワイルドカード（`*.rocu.co.jp`）は作らない（GitHub が乗っ取りリスクとして明示的に非推奨）。
+
+推奨: GitHub のアカウント設定（Settings → Pages）でドメイン所有権を検証しておくと、
+他人が同じドメインを自分のリポジトリへ設定できなくなる（`_github-pages-challenge-rx830128` TXT）。
 
 ### STEP 4 — 反映確認と HTTPS
 
@@ -165,12 +145,20 @@ GitHub は「AAAA を入れるなら A も併記すること」と書いてい�
 nslookup rocu.co.jp
 ```
 
-上記4IPが返ることを確認する（DNS 反映は最大24時間）。
-そのあと GitHub の Pages 設定で **Enforce HTTPS** を有効化する
-（証明書発行まで最大24時間かかることがある）。
+上記4IPが返ることを確認する（DNS反映は最大24時間）。
+そのあとリポジトリの Settings → Pages で **Enforce HTTPS** を有効化する
+（証明書発行まで最大24時間かかることがある）。2026-09-24 時点では `https_enforced: false`。
 
-### STEP 5 — Stripe に提出
+### STEP 5 — Stripe へ提出
 
 `https://rocu.co.jp/` を提出。**HTTPS が有効になってから**出すこと。
 
-実際に設定したレコードと日付は、完了後にここへ追記する。
+### 更新のしかた
+
+```
+git -C C:/hp-mock-factory/site-rocu add -A
+git -C C:/hp-mock-factory/site-rocu commit -m "..."
+git -C C:/hp-mock-factory/site-rocu push
+```
+
+push すると GitHub Pages が自動で再ビルドする（1分程度）。
